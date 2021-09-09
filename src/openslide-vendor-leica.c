@@ -583,6 +583,9 @@ static bool should_use_legacy_quickhash(const struct collection *collection) {
       brightfield_main_images++;
     }
   }
+  g_debug("brightfield images %d", brightfield_main_images);
+  g_debug("macro images %d", macro_images);
+
   return (brightfield_main_images == 1 && macro_images <= 1);
 }
 
@@ -601,7 +604,7 @@ static bool create_levels_from_collection(openslide_t *osr,
 
   // determine quickhash mode
   bool legacy_quickhash = should_use_legacy_quickhash(collection);
-  //g_debug("legacy quickhash %s", legacy_quickhash ? "true" : "false");
+  g_debug("legacy quickhash %s", legacy_quickhash ? "true" : "false");
 
   // process main image
   struct image *first_main_image = NULL;
@@ -641,6 +644,12 @@ static bool create_levels_from_collection(openslide_t *osr,
                first_main_image->illumination_source) ||
         strcmp(image->objective, first_main_image->objective) ||
         image->dimensions->len != first_main_image->dimensions->len) {
+      g_debug("image ill %s", image->illumination_source);
+      g_debug("first ill %s", first_main_image->illumination_source);
+      g_debug("image obj %s", image->objective);
+      g_debug("first obj %s", first_main_image->objective);
+      g_debug("image dim %s", image->dimensions->len);
+      g_debug("first dim %s", first_main_image->dimensions->len);
       g_set_error(err, OPENSLIDE_ERROR, OPENSLIDE_ERROR_FAILED,
                   "Slides with dissimilar main images are not supported");
       return false;
