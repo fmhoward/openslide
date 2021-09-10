@@ -493,10 +493,10 @@ static struct collection *parse_xml_description(const char *xml,
     PARSE_INT_ATTRIBUTE_OR_FAIL(view, LEICA_ATTR_OFFSET_Y,
                                 image->nm_offset_y);
 
-    image->is_macro = (image->nm_offset_x == 0 &&
+    image->is_macro = ((image->nm_offset_x == 0 &&
                        image->nm_offset_y == 0 &&
                        image->nm_across == collection->nm_across &&
-                       image->nm_down == collection->nm_down);
+                       image->nm_down == collection->nm_down) || (strcmp(image->objective, "1.25") == 0));
 
     // get dimensions
     ctx->node = image_node;
@@ -583,9 +583,6 @@ static bool should_use_legacy_quickhash(const struct collection *collection) {
       brightfield_main_images++;
     }
   }
-  g_debug("brightfield images %d", brightfield_main_images);
-  g_debug("macro images %d", macro_images);
-
   return (brightfield_main_images == 1 && macro_images <= 1);
 }
 
@@ -601,21 +598,25 @@ static bool create_levels_from_collection(openslide_t *osr,
 
   // set barcode property
   set_prop(osr, "leica.barcode", collection->barcode);
-
   // determine quickhash mode
   bool legacy_quickhash = should_use_legacy_quickhash(collection);
-  g_debug("legacy quickhash %s", legacy_quickhash ? "true" : "false");
 
   // process main image
   struct image *first_main_image = NULL;
+  uint32_t loopcount = 0;
   for (uint32_t image_num = 0; image_num < collection->images->len;
        image_num++) {
     struct image *image = collection->images->pdata[image_num];
+	
 
     if (image->is_macro) {
       continue;
     }
-
+	loopcount = loopcount + 1;
+	if (loopcount > 1) {
+	  printf("Too many slide images!\n");
+	  continue;
+	}
     // we only support brightfield
     if (!image->illumination_source ||
         strcmp(image->illumination_source, LEICA_VALUE_BRIGHTFIELD)) {
@@ -625,7 +626,6 @@ static bool create_levels_from_collection(openslide_t *osr,
     if (!first_main_image) {
       // first main image
       first_main_image = image;
-
       // add some properties
       set_prop(osr, "leica.aperture", image->aperture);
       set_prop(osr, "leica.creation-date", image->creation_date);
@@ -638,18 +638,12 @@ static bool create_levels_from_collection(openslide_t *osr,
       _openslide_duplicate_int_prop(osr, "leica.objective",
                                     OPENSLIDE_PROPERTY_NAME_OBJECTIVE_POWER);
     }
-
     // verify that it's safe to composite this main image with the others
     if (strcmp(image->illumination_source,
                first_main_image->illumination_source) ||
         strcmp(image->objective, first_main_image->objective) ||
         image->dimensions->len != first_main_image->dimensions->len) {
-      g_debug("image ill %s", image->illumination_source);
-      g_debug("first ill %s", first_main_image->illumination_source);
-      g_debug("image obj %s", image->objective);
-      g_debug("first obj %s", first_main_image->objective);
-      g_debug("image dim %s", image->dimensions->len);
-      g_debug("first dim %s", first_main_image->dimensions->len);
+
       g_set_error(err, OPENSLIDE_ERROR, OPENSLIDE_ERROR_FAILED,
                   "Slides with dissimilar main images are not supported");
       return false;
